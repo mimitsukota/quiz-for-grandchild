@@ -1,64 +1,57 @@
 import streamlit as st
 import google.generativeai as genai
 from gtts import gTTS
-import ast
-import re
+import json
 
-# カギの準備
-try:
-    genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
-except:
-    st.error("カギの設定を確認してください。")
-    st.stop()
+# カギの設定
+genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
+
+# --- クイズを新しく作る関数 ---
+def create_new_quiz():
+    # 2026年現在、最も安定しているモデル名です
+    model = genai.GenerativeModel('gemini-1.5-flash-latest')
+    
+    # AIに「絶対にこの形(JSON)で答えて」と念押しする設定
+    prompt = "4歳向けのクイズ（恐竜、妖怪、動物のどれか）を1問作って。必ず以下のJSON形式だけで出力して。挨拶や解説は厳禁。 {'genre': 'ジャンル', 'q': '問題文', 'a': '答えのひらがな', 'img': '絵文字'}"
+    
+    try:
+        # generation_configで「JSONで返せ」と強制します
+        response = model.generate_content(
+            prompt,
+            generation_config={"response_mime_type": "application/json"}
+        )
+        # 返ってきたデータを辞書形式に変換
+        return json.loads(response.text)
+    except:
+        # もしAIが失敗した時のための「第2予備問題」
+        return {"genre": "きょうりゅう", "q": "からだが とっても おおきくて、くびが ながーいのだーれだ？", "a": "ぶらきおさうるす", "img": "🦕"}
 
 st.title("🦖 AIむげんクイズ 👻")
 
-def get_quiz():
-    model = genai.GenerativeModel('gemini-1.5-flash-latest')
-    prompt = "4歳向けクイズ（恐竜、妖怪、動物）を1問作って。必ず以下の形式の辞書データだけを返して： {'genre': 'ジャンル', 'q': '問題文', 'a': '答えのひらがな', 'img': '絵文字'}"
-    
-    try:
-        response = model.generate_content(prompt)
-        match = re.search(r"\{.*\}", response.text, re.DOTALL)
-        if match:
-            return ast.literal_eval(match.group())
-        else:
-            raise Exception()
-    except:
-        return {"genre": "どうぶつ", "q": "おはなが ながーいのだーれだ？", "a": "ぞう", "img": "🐘"}
-
-# --- ここが重要！ボタンを押した時の処理 ---
-if st.button("🌟 新しい もんだいに かえる"):
-    # クイズのデータを一度完全に消去する
-    if 'quiz' in st.session_state:
-        del st.session_state.quiz
-    # 強制的に画面を真っさらな状態にしてやり直す
+# --- 「つぎへ」ボタン ---
+if st.button("🌟 新しい もんだいにする"):
+    st.session_state.quiz = create_new_quiz()
     st.rerun()
 
-# クイズを表示する仕組み
+# 初回の準備
 if 'quiz' not in st.session_state:
-    with st.spinner('AIが 新しい問題を かんがえ中...'):
-        st.session_state.quiz = get_quiz()
+    st.session_state.quiz = create_new_quiz()
 
 q = st.session_state.quiz
 
-st.header(f"ジャンル：{q['genre']}")
+# --- 画面の表示 ---
+st.info(f"ジャンル： {q['genre']}")
 st.subheader(q['q'])
 
-# 音声ボタン
-if st.button("🔊 もんだいを きく"):
+if st.button("🔊 こえを きく"):
     gTTS(q['q'], lang='ja').save("q.mp3")
     st.audio("q.mp3")
 
-ans = st.text_input("こたえは なあに？", key="input_text")
+ans = st.text_input("こたえは なあに？", key="input_field")
 
-# 判定
 if st.button("こたえあわせ"):
     if ans in q['a'] or q['a'] in ans:
         st.balloons()
-        st.success(f"あたり！ せいかいは「{q['a']}」だよ！ {q['img']}")
-        st.write("上の「新しい もんだいに かえる」ボタンを おしてね！")
-    elif ans == "":
-        st.info("なにか かいてみてね！")
+        st.success(f"あたり！「{q['a']}」だよ {q['img']}")
     else:
-        st.error("おしい！もういちど かんがえてみてね。")
+        st.error("おしい！もういちど！")

@@ -2,13 +2,14 @@ import streamlit as st
 import google.generativeai as genai
 from gtts import gTTS
 import random
+import json
 
-# --- 秘密の金庫（Secrets）からカギを取り出す ---
+# --- 秘密の金庫からカギを取り出す ---
 try:
     GOOGLE_API_KEY = st.secrets["GOOGLE_API_KEY"]
     genai.configure(api_key=GOOGLE_API_KEY)
 except:
-    st.error("APIキーの設定が見つかりません。StreamlitのSecretsを設定してください。")
+    st.error("APIキーの設定が見つかりません。")
     st.stop()
 
 st.title("🦖 AIむげんクイズ 👻")
@@ -18,15 +19,18 @@ def get_ai_quiz():
     model = genai.GenerativeModel('gemini-1.5-flash')
     prompt = """
     4歳の子供向けに、恐竜、妖怪、動物のどれかに関するクイズを1問作ってください。
-    以下の形式（Pythonの辞書形式）だけで出力してください。余計な解説は不要です。
-    {"genre": "ジャンル名", "q": "問題文（ガオー！など特徴を言う）", "a": "答え（ひらがな）", "img": "絵文字"}
+    以下のJSON形式だけで出力してください。
+    {"genre": "ジャンル名", "q": "問題文", "a": "答えのひらがな", "img": "絵文字"}
     """
     response = model.generate_content(prompt)
-    return eval(response.text)
+    # 余計な装飾（```jsonなど）を削るお掃除
+    txt = response.text.replace('```json', '').replace('```', '').strip()
+    return json.loads(txt)
 
-# --- 画面の表示 ---
+# --- アプリの動き ---
 if 'current_quiz' not in st.session_state:
-    st.session_state.current_quiz = get_ai_quiz()
+    with st.spinner('AIがクイズをかんがえ中...'):
+        st.session_state.current_quiz = get_ai_quiz()
 
 quiz = st.session_state.current_quiz
 
@@ -37,7 +41,7 @@ if st.button("🔊 もんだいを きく"):
     tts.save("q.mp3")
     st.audio("q.mp3")
 
-answer = st.text_input("こたえは なあに？（ひらがなでいれてね）")
+answer = st.text_input("こたえは なあに？")
 
 if st.button("こたえあわせ"):
     if answer in quiz['a'] or quiz['a'] in answer:
@@ -45,7 +49,7 @@ if st.button("こたえあわせ"):
         st.success(f"せいかい！ {quiz['a']} だよ！")
         st.write(f"## {quiz['img']}")
         if st.button("つぎのもんだいへ"):
-            st.session_state.current_quiz = get_ai_quiz()
+            del st.session_state.current_quiz
             st.rerun()
     else:
         st.error("おしい！もういちど かんがえてみてね。")

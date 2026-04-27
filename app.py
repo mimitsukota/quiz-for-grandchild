@@ -4,60 +4,53 @@ from gtts import gTTS
 import json
 import re
 
-# --- 秘密の金庫からカギを取り出す ---
+# カギの準備
 try:
-    GOOGLE_API_KEY = st.secrets["GOOGLE_API_KEY"]
-    genai.configure(api_key=GOOGLE_API_KEY)
+    genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
 except:
-    st.error("APIキーの設定（Secrets）をもう一度確認してください。")
+    st.error("カギ（APIキー）の設定を確認してください。")
     st.stop()
 
 st.title("🦖 AIむげんクイズ 👻")
 
-# --- AIにクイズを作ってもらう関数 ---
-def get_ai_quiz():
+# AIにクイズを作らせる
+def get_quiz():
     model = genai.GenerativeModel('gemini-1.5-flash')
-    # AIへの命令をより厳しくしました
-    prompt = "4歳の子供向けに、恐竜、妖怪、動物のクイズを1問作って。以下の形式のJSONデータだけを出力して。余計な挨拶は禁止。 {'genre': 'ジャンル', 'q': '問題文', 'a': '答え(ひらがな)', 'img': '絵文字'}"
-    
+    # AIに「余計なことは言わないで」と強く命令
+    prompt = "4歳向けクイズを1問作って。形式は必ずこれだけ： {'genre': '動物', 'q': '問題', 'a': '答え', 'img': '絵文字'}"
     response = model.generate_content(prompt)
     
-    # AIの返答からJSONの部分だけを無理やり抜き出す魔法
-    match = re.search(r'\{.*\}', response.text, re.DOTALL)
+    # AIの返事から { } の部分だけを抜き出す魔法
+    res_text = response.text
+    match = re.search(r"\{.*\}", res_text, re.DOTALL)
     if match:
-        json_str = match.group()
-        # シングルクォートをダブルクォートに変換
-        json_str = json_str.replace("'", '"')
-        return json.loads(json_str)
+        # JSONとして読み込む（シングルクォートも許容する設定）
+        quiz_data = eval(match.group())
+        return quiz_data
     else:
-        # 万が一失敗した時の予備の問題
-        return {"genre": "どうぶつ", "q": "おはなが ながーいのだーれだ？", "a": "ぞう", "img": "🐘"}
+        # 万が一の予備問題
+        return {"genre":"どうぶつ","q":"おはながながいのだーれだ？","a":"ぞう","img":"🐘"}
 
-# --- アプリの表示 ---
-if 'current_quiz' not in st.session_state:
-    with st.spinner('AIが クイズを かんがえ中...'):
-        st.session_state.current_quiz = get_ai_quiz()
+# クイズを画面に出す
+if 'quiz' not in st.session_state:
+    st.session_state.quiz = get_quiz()
 
-quiz = st.session_state.current_quiz
+q = st.session_state.quiz
 
-st.header(f"今回のジャンル： {quiz['genre']}")
+st.header(f"ジャンル：{q['genre']}")
+st.subheader(q['q'])
 
-# 音声読み上げ
-if st.button("🔊 もんだいを きく"):
-    tts = gTTS(quiz['q'], lang='ja')
-    tts.save("q.mp3")
+if st.button("🔊 こえを きく"):
+    gTTS(q['q'], lang='ja').save("q.mp3")
     st.audio("q.mp3")
 
-answer = st.text_input("こたえは なあに？（ひらがな）")
-
+ans = st.text_input("こたえは？")
 if st.button("こたえあわせ"):
-    if answer in quiz['a'] or quiz['a'] in answer:
+    if ans in q['a'] or q['a'] in ans:
         st.balloons()
-        st.success(f"せいかい！ {quiz['a']} だよ！ {quiz['img']}")
-        if st.button("つぎのもんだいへ"):
-            del st.session_state.current_quiz
+        st.success(f"あたり！ {q['a']} だよ {q['img']}")
+        if st.button("つぎへ"):
+            del st.session_state.quiz
             st.rerun()
-    elif answer == "":
-        st.warning("なにか かいてみてね！")
     else:
-        st.error("おしい！もういちど かんがえてみてね。")
+        st.error("ざんねん！もういちど！")

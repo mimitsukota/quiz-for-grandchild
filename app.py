@@ -1,55 +1,37 @@
 import streamlit as st
-import google.generativeai as genai
 from gtts import gTTS
-import json
+import random
 
-# --- 1. カギの設定 ---
-try:
-    api_key = st.secrets["GOOGLE_API_KEY"]
-    genai.configure(api_key=api_key)
-except Exception as e:
-    st.error(f"カギの設定を確認してください: {e}")
-    st.stop()
+st.title("🦖 ばあばの むげんクイズ 👻")
 
-st.title("🦖 AIむげんクイズ 👻")
+# ばあばが用意したクイズリスト（ここならカギ不要で動きます！）
+def get_bakasan_quiz():
+    quizzes = [
+        {"genre": "どうぶつ", "q": "おはなが ながーいのだーれだ？", "a": "ぞう", "img": "🐘"},
+        {"genre": "きょうりゅう", "q": "おなかが すくと ほえる、きょうりゅうの おうさまは？", "a": "てぃらのさうるす", "img": "🦖"},
+        {"genre": "ようかい", "q": "あたまに おさらが のっているのは？", "a": "かっぱ", "img": "🥒"},
+        {"genre": "どうぶつ", "q": "ぴょんぴょん はねる、おみみが ながいこは？", "a": "うさぎ", "img": "🐰"}
+    ]
+    return random.choice(quizzes)
 
-# --- 2. クイズ作成関数（2026年4月安定版） ---
-def create_new_quiz():
-    # エラーが出た名前を修正しました
-    model = genai.GenerativeModel('gemini-1.5-flash')
-    
-    prompt = "4歳向けクイズ（恐竜、妖怪、動物）を1問作成。JSON形式： {'genre': '...', 'q': '...', 'a': '...', 'img': '...'}"
-    
-    try:
-        # v1betaではなく標準的な呼び出し方に合わせました
-        response = model.generate_content(
-            prompt,
-            generation_config={"response_mime_type": "application/json"}
-        )
-        return json.loads(response.text)
-    except Exception as e:
-        # 万が一の予備（次はステゴサウルスにしました！）
-        return {"genre": "きょうりゅう", "q": "せなかに いたが たくさん あるのは？", "a": "すてごさうるす", "img": "🦖"}
-
-# --- 3. アプリの動き ---
-if st.button("🌟 新しい もんだいにする"):
-    st.session_state.quiz = create_new_quiz()
+if st.button("🌟 つぎのもんだい"):
+    st.session_state.my_quiz = get_bakasan_quiz()
     st.rerun()
 
-if 'quiz' not in st.session_state:
-    st.session_state.quiz = create_new_quiz()
+if 'my_quiz' not in st.session_state:
+    st.session_state.my_quiz = get_bakasan_quiz()
 
-q = st.session_state.quiz
+q = st.session_state.my_quiz
 
-st.info(f"ジャンル： {q['genre']}")
+st.info(f"ジャンル：{q['genre']}")
 st.subheader(q['q'])
 
 if st.button("🔊 こえを きく"):
     gTTS(q['q'], lang='ja').save("q.mp3")
     st.audio("q.mp3")
 
-ans = st.text_input("こたえは なあに？", key="input_field")
+ans = st.text_input("こたえは？")
 if st.button("こたえあわせ"):
     if ans in q['a'] or q['a'] in ans:
         st.balloons()
-        st.success(f"あたり！「{q['a']}」だよ！")
+        st.success(f"あたり！ {q['a']} だよ！ {q['img']}")
